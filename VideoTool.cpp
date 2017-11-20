@@ -6,32 +6,85 @@
 //#include <opencv2\cv.h>
 #include "opencv2/opencv.hpp"
 #include <stdio.h>
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <stdlib.h>
 #include <netinet/in.h>
-#include <netdb.h> 
-#include<arpa/inet.h> //inet_addr
+#include <string.h>
+#include <time.h>
+#include <arpa/inet.h>
+#define PORT 20232
+#define DEL 500
+    struct sockaddr_in address;
+    int sock = 0, valread;
+    struct sockaddr_in serv_addr;
+
+
+void delay(int number_of_seconds)
+{int milli_seconds = 1000 * number_of_seconds;
+ clock_t start_time = clock();
+ while (clock() < start_time + milli_seconds);
+}
+
+int setsock(int port,const char ip[100])
+{    char hello[100];
+    char buffer[1024] = {0};
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        printf("\n Socket creation error \n");
+        return -1;
+    }
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0)
+    { printf("\nInvalid address/ Address not supported \n");
+        return -1;}
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        printf("\nConnection Failed \n");
+        return -1;
+    }
+    printf("%d %s\n",port,ip);
+    return 0;
+}
+
+void strateg(const char mv[100])
+{int i;
+char hello[100];
+    printf("%s",mv);
+    for(i=0;i<strlen(mv);i++)
+    {printf("%c\n",mv[i]);
+      if(mv[i]=='f'||mv[i]=='b'||mv[i]=='r'||mv[i]=='l'||mv[i]=='s')
+      {sprintf(hello,"%c\n",mv[i]);
+       printf("%s sent\n",hello);
+    send(sock , hello , strlen(hello) , 0 );
+    delay(DEL);}
+    }
+   strcpy(hello,"s \n");
+        send(sock , hello , strlen(hello) , 0 );
+    printf("%s sent\n",hello);
+    delay(DEL);
+}
+
 using namespace std;
 using namespace cv;
 //initial min and max HSV filter values.
 //these will be changed using trackbars
-
-
-
-int H_MIN = 165;
-int H_MAX = 183;
-int S_MIN = 40;
-int S_MAX = 187;
+struct robo{int x,y;}a,b;
+int H_MIN = 164;
+int H_MAX = 181;
+int S_MIN = 49;
+int S_MAX = 256;
 int V_MIN = 0;
 int V_MAX = 256;
 
-int H_MIN2 = 22;
-int H_MAX2 = 183;
-int S_MIN2 = 57;
-int S_MAX2 = 187;
-int V_MIN2 = 204;
-int V_MAX2 = 256;
-
+int H_MIN1 = 28;
+int H_MAX1 = 56;
+int S_MIN1 = 49;
+int S_MAX1 = 256;
+int V_MIN1 = 0;
+int V_MAX1 = 256;
 //default capture width and height
 const int FRAME_WIDTH = 640;
 const int FRAME_HEIGHT = 480;
@@ -45,6 +98,7 @@ const std::string windowName = "Original Image";
 const std::string windowName1 = "HSV Image";
 const std::string windowName2 = "Thresholded Image";
 const std::string windowName3 = "After Morphological Operations";
+const std::string windowName4 = "HSV Image2";
 const std::string trackbarWindowName = "Trackbars";
 
 
@@ -82,13 +136,6 @@ void createTrackbars() {
 	sprintf(TrackbarName, "S_MAX", S_MAX);
 	sprintf(TrackbarName, "V_MIN", V_MIN);
 	sprintf(TrackbarName, "V_MAX", V_MAX);
- 
-  sprintf(TrackbarName, "H_MIN2", H_MIN2);
-	sprintf(TrackbarName, "H_MAX2", H_MAX2);
-	sprintf(TrackbarName, "S_MIN2", S_MIN2);
-	sprintf(TrackbarName, "S_MAX2", S_MAX2);
-	sprintf(TrackbarName, "V_MIN2", V_MIN2);
-	sprintf(TrackbarName, "V_MAX2", V_MAX2);
 	//create trackbars and insert them into window
 	//3 parameters are: the address of the variable that is changing when the trackbar is moved(eg.H_LOW),
 	//the max value the trackbar can move (eg. H_HIGH),
@@ -100,14 +147,6 @@ void createTrackbars() {
 	createTrackbar("S_MAX", trackbarWindowName, &S_MAX, S_MAX, on_trackbar);
 	createTrackbar("V_MIN", trackbarWindowName, &V_MIN, V_MAX, on_trackbar);
 	createTrackbar("V_MAX", trackbarWindowName, &V_MAX, V_MAX, on_trackbar);
- 
- createTrackbar("H_MIN2", trackbarWindowName, &H_MIN2, H_MAX2, on_trackbar);
-	createTrackbar("H_MAX2", trackbarWindowName, &H_MAX2, H_MAX2, on_trackbar);
-	createTrackbar("S_MIN2", trackbarWindowName, &S_MIN2, S_MAX2, on_trackbar);
-	createTrackbar("S_MAX2", trackbarWindowName, &S_MAX2, S_MAX2, on_trackbar);
-	createTrackbar("V_MIN2", trackbarWindowName, &V_MIN2, V_MAX2, on_trackbar);
-	createTrackbar("V_MAX2", trackbarWindowName, &V_MAX2, V_MAX2, on_trackbar);
-
 
 
 }
@@ -198,6 +237,7 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 				//draw object location on screen
 				//cout << x << "," << y;
 				drawObject(x, y, cameraFeed);
+				line(cameraFeed, Point(a.x, a.y), Point(b.x , b.y), Scalar(0, 0, 255), 2);
 
 			}
 
@@ -207,50 +247,15 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 	}
 }
 
- 
-int clientSocket(char * message)
+/*void showrobo(Mat cameraFeed,Mat HSV,Mat th,Mat th1,struct robo a,struct robo b,VideoCapture capture,bool trackObjects,bool useMorphOps)
 {
-    int socket_desc;
-    struct sockaddr_in server;
-  //  char *message;
-     
-    //Create socket
-    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-    if (socket_desc == -1)
-    {
-        printf("Could not create socket");
-    }
-    //server=gethotbyname(193.226.12.217);  
-  server.sin_addr.s_addr = inet_addr("193.226.12.217");
-   server.sin_family = AF_INET;
-    server.sin_port = htons( 20232 );
- 
-    //Connect to remote server
-    if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0)
-    {
-        puts("connect error");
-        return 1;
-    }
-     
-    puts("Connected\n");
-     
-    //Send some data
-   // message = "f";
-    if( send(socket_desc , message , strlen(message),0 ) < 0)
-    {
-        puts("Send failed");
-        return 1;
-    }
-    puts("Data Send\n");
-     
-    return 0;
+
+
 }
-
-
-
+*/
 int main(int argc, char* argv[])
 {
-/*
+
 	//some boolean variables for different functionality within this
 	//program
 	bool trackObjects = true;
@@ -262,9 +267,13 @@ int main(int argc, char* argv[])
 	//matrix storage for HSV image
 	Mat HSV;
 	//matrix storage for binary threshold image
-	Mat threshold;
+	Mat threshold,threshold1;
 	//x and y values for the location of the object
-	int x = 0, y = 0;
+	a.x=0;
+	a.y=0;
+	b.x=0;
+	b.y=0;
+	//int x = 0, y = 0,x1=0,y1=0;
 	//create slider bars for HSV filtering
 	createTrackbars();
 	//video capture object to acquire webcam feed
@@ -276,48 +285,60 @@ int main(int argc, char* argv[])
 	capture.set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
 	//start an infinite loop where webcam feed is copied to cameraFeed matrix
 	//all of our operations will be performed within this loop
-
-
-*/
-
-	while (1) {
- /*
-		//store image to matrix
+ int i,var=20;
+ float m;
+ struct robo oldpos,newpos;
+ setsock(20232,"193.226.12.217");
+    while (1)
+  {for(i=0;i<2;i++)
+   {           //store image to matrix
 		capture.read(cameraFeed);
-    if(cameraFeed.empty())
- {printf("Camera feed is empty");
-    exit(1); 
-}
-else
-	{	//convert frame from BGR to HSV colorspace
+		//convert frame from BGR to HSV colorspace
 		cvtColor(cameraFeed, HSV, COLOR_BGR2HSV);
 		//filter HSV image between values and store filtered image to
 		//threshold matrix
 		inRange(HSV, Scalar(H_MIN, S_MIN, V_MIN), Scalar(H_MAX, S_MAX, V_MAX), threshold);
-   
-   inRange(HSV, Scalar(H_MIN2, S_MIN2, V_MIN2), Scalar(H_MAX2, S_MAX2, V_MAX2), threshold);
+		inRange(HSV, Scalar(H_MIN1, S_MIN1, V_MIN1), Scalar(H_MAX1, S_MAX1, V_MAX1), threshold1);
 		//perform morphological operations on thresholded image to eliminate noise
 		//and emphasize the filtered object(s)
 		if (useMorphOps)
-			morphOps(threshold);
+		{morphOps(threshold);morphOps(threshold1);}
 		//pass in thresholded frame to our object tracking function
 		//this function will return the x and y coordinates of the
 		//filtered object
 		if (trackObjects)
-			trackFilteredObject(x, y, threshold, cameraFeed);
-
+		{trackFilteredObject(a.x, a.y, threshold, cameraFeed);
+                 trackFilteredObject(b.x, b.y, threshold1, cameraFeed);}
 		//show frames
+		imshow(windowName4, threshold1);
 		imshow(windowName2, threshold);
 		imshow(windowName, cameraFeed);
-		//imshow(windowName1, HSV);  
+		//imshow(windowName1, HSV);
 		setMouseCallback("Original Image", on_mouse, &p);
 		//delay 30ms so that screen can refresh.
 		//image will not appear without this waitKey() command
-		waitKey(30);
-	}}
- */
- char message[5];
- scanf("%s",message);
- printf("%d",clientSocket(message));  
-}	return 0;
+		waitKey(40);
+	 //a-roz  b-galben
+	if(i==0)
+	{oldpos=b;strateg("fs");
+	  printf("oldpos %d-%d\n",oldpos.x,oldpos.y);
+	}
+	else if(i==1)
+	{newpos=b;
+	  printf("newpos %d-%d",newpos.x,newpos.y);
+	  m=(float)(newpos.y-oldpos.y)/(float)(newpos.x-oldpos.x);
+	  line(cameraFeed, Point(oldpos.x, oldpos.y), Point(newpos.x , newpos.y), Scalar(0, 100, 255), 2);
+	  if(oldpos.x!=newpos.x&&oldpos.y!=newpos.y)
+      {if(a.y>m*(b.x-newpos.x) +newpos.y+var)
+	   strateg("dfs");
+	  else if(b.y<m*(b.x-newpos.x) +newpos.y-var)
+	    strateg("lfs");
+	 else strateg("ffs");
+	  }}
+	  //waitKey(40);
+   }
+  }
+
+	return 0;
 }
+
